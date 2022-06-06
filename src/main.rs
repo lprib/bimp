@@ -2,8 +2,8 @@ use nannou::prelude::*;
 
 struct Model {
     window: window::Id,
-    test_grid: Grid<Tile, 4, 4>,
-    rot: usize,
+    grid: Grid<Tile, 64, 64>,
+    rules: Vec<ReplacementRule<Tile, 3>>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -86,9 +86,14 @@ impl<T: Default + Copy, const W: usize, const H: usize> Default for Grid<T, W, H
 }
 
 #[derive(Debug)]
-struct PatchMatch {
+struct PatchOrientation {
     rotation_times: usize,
     position: (isize, isize),
+}
+
+struct ReplacementRule<T, const S: usize> {
+    find: Grid<Option<T>, S, S>,
+    replace: Grid<Option<T>, S, S>,
 }
 
 impl<T: Eq + Copy, const W: usize, const H: usize> Grid<T, W, H> {
@@ -126,24 +131,60 @@ impl<T: Eq + Copy, const W: usize, const H: usize> Grid<T, W, H> {
         true
     }
 
-    fn get_patch_matches<const S: usize>(&self, patch: &Grid<Option<T>, S, S>) -> Vec<PatchMatch> {
+    fn get_patch_matches<const S: usize>(
+        &self,
+        patch: &Grid<Option<T>, S, S>,
+    ) -> Vec<PatchOrientation> {
         let mut matches = Vec::new();
         for rotation_times in [0, 1, 2, 3] {
             let rotated_patch = patch.rotate(rotation_times);
             for offset_x in (-(S as isize - 1))..W as isize {
                 for offset_y in (-(S as isize - 1))..H as isize {
-                    println!("{}, {}", offset_x, offset_y);
                     if self.check_patch_at(&rotated_patch, offset_x, offset_y) {
-                        matches.push(PatchMatch {
+                        matches.push(PatchOrientation {
                             rotation_times,
                             position: (offset_x, offset_y),
                         });
-                        println!("Match!");
                     }
                 }
             }
         }
         matches
+    }
+
+    fn replace_at<const S: usize>(
+        &mut self,
+        replacement_patch: &Grid<Option<T>, S, S>,
+        orientation: &PatchOrientation,
+    ) {
+        let rotated = replacement_patch.rotate(orientation.rotation_times);
+        // TODO abstract 2d iteration out of Grid
+        for (y, row) in rotated.items.iter().enumerate() {
+            for (x, item) in row.iter().enumerate() {
+                if let Some(item) = item {
+                    self.items[((y as isize) + orientation.position.1) as usize]
+                        [((x as isize) + orientation.position.0) as usize] = *item;
+                }
+            }
+        }
+    }
+
+    fn single_random_replace<const S: usize>(&mut self, rule: &ReplacementRule<T, S>) -> bool {
+        let matches = self.get_patch_matches(&rule.find);
+        if matches.is_empty() {
+            return false;
+        }
+        let chosen_match = &matches[random::<usize>() % matches.len()];
+        self.replace_at(&rule.replace, chosen_match);
+        return true;
+    }
+
+    fn priority_random_repace<const S: usize>(&mut self, rules: &[ReplacementRule<T, S>]) {
+        for rule in rules {
+            if self.single_random_replace(rule) {
+                break;
+            }
+        }
     }
 }
 
@@ -172,7 +213,7 @@ impl<T: Default + Copy, const S: usize> Grid<T, S, S> {
             // 0 degrees (no-op)
             0 => self.transform_indices(|x, _, _| x, |_, y, _| y),
             // 90 degrees
-            1 => self.transform_indices(|_, y, size| size - 1 - y, |x, _, size| size - 1 - x),
+            1 => self.transform_indices(|_, y, size| size - 1 - y, |x, _, size| x),
             // 180 degrees
             2 => self.transform_indices(|x, _, size| size - 1 - x, |_, y, size| size - 1 - y),
             // 270 degrees
@@ -198,7 +239,8 @@ impl<T: Colorable, const W: usize, const H: usize> Grid<T, W, H> {
                 let tile_rect = Rect::from_corner_points(
                     [corner_x, corner_y],
                     [corner_x - tile_w, corner_y - tile_h],
-                );
+                )
+                .pad(tile_w / 10.0);
 
                 draw.rect()
                     .xy(tile_rect.xy())
@@ -210,60 +252,88 @@ impl<T: Colorable, const W: usize, const H: usize> Grid<T, W, H> {
 }
 
 fn main() {
-    //nannou::app(model).event(event).run();
-    const B: Tile = Tile::Black;
-    const R: Tile = Tile::Red;
-    let grid = Grid {
-        items: [
-            [R, B, B, B, B, B, B, B],
-            [R, B, R, R, B, B, B, B],
-            [B, B, B, B, B, B, B, B],
-            [B, B, B, B, B, B, B, B],
-        ],
-    };
-
-    const PD: Option<Tile> = None;
-    const PR: Option<Tile> = Some(Tile::Red);
-
-    let patch = Grid {
-        items: [[PR, PR], [PD, PD]],
-    };
-
-    println!("{:#?}", grid.get_patch_matches(&patch));
+    nannou::app(model).event(event).run();
 }
 
 fn model(app: &App) -> Model {
     let window = app
         .new_window()
         .size(256, 256)
-        .mouse_pressed(mouse_pressed_fn)
+        .key_pressed(key_pressed_fn)
         .view(view)
         .build()
         .unwrap();
 
-    const X: Tile = Tile::Red;
-    const I: Tile = Tile::Black;
+    let mut grid: Grid<Tile, 64, 64> = Default::default();
+    grid.items[32][32] = Tile::Red;
+
+    const R: Option<Tile> = Some(Tile::Red);
+    const K: Option<Tile> = Some(Tile::Black);
+    const W: Option<Tile> = Some(Tile::White);
+    const G: Option<Tile> = Some(Tile::Green);
+    const O: Option<Tile> = Some(Tile::Orange);
+    const B: Option<Tile> = Some(Tile::Blue);
+    const X: Option<Tile> = None;
 
     Model {
         window,
-        test_grid: Grid {
-            items: [[X, I, I, X], [I, I, I, I], [X, I, I, X], [I, X, X, I]],
-        },
-        rot: 0,
+        grid,
+        rules: vec![
+            ReplacementRule {
+                find: Grid {
+                    items: [[R, K, K], [X, X, X], [X, X, X]],
+                },
+                replace: Grid {
+                    items: [[W, W, R], [X, X, X], [X, X, X]],
+                },
+            },
+            ReplacementRule {
+                find: Grid {
+                    items: [[R, K, W], [X, X, X], [X, X, X]],
+                },
+                replace: Grid {
+                    items: [[G, W, O], [X, X, X], [X, X, X]],
+                },
+            },
+            ReplacementRule {
+                find: Grid {
+                    items: [[O, W, G], [X, X, X], [X, X, X]],
+                },
+                replace: Grid {
+                    items: [[O, K, B], [X, X, X], [X, X, X]],
+                },
+            },
+            ReplacementRule {
+                find: Grid {
+                    items: [[B, W, W], [X, X, X], [X, X, X]],
+                },
+                replace: Grid {
+                    items: [[K, K, B], [X, X, X], [X, X, X]],
+                },
+            },
+            ReplacementRule {
+                find: Grid {
+                    items: [[B, W, O], [X, X, X], [X, X, X]],
+                },
+                replace: Grid {
+                    items: [[K, K, R], [X, X, X], [X, X, X]],
+                },
+            },
+        ],
     }
 }
 
 fn event(_app: &App, _model: &mut Model, _event: Event) {}
 
-fn mouse_pressed_fn(_app: &App, model: &mut Model, _button: MouseButton) {
-    model.rot += 1;
+fn key_pressed_fn(_app: &App, model: &mut Model, _k: Key) {
+    model.grid.priority_random_repace(&model.rules)
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
     draw.background().color(Tile::LightGrey.color());
-    let rot_grid = model.test_grid.rotate(model.rot);
-    rot_grid.draw(&draw, Rect::from_w_h(200.0, 200.0));
+
+    model.grid.draw(&draw, app.window_rect().pad(20.0));
 
     draw.to_frame(app, &frame).unwrap();
 }
