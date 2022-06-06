@@ -6,7 +6,7 @@ struct Model {
     rot: usize,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 enum Tile {
     Black,
     DarkBlue,
@@ -85,13 +85,72 @@ impl<T: Default + Copy, const W: usize, const H: usize> Default for Grid<T, W, H
     }
 }
 
-impl<T: Default + Copy, const S: usize> Grid<T, S, S> {
-    fn rot_90(&self) -> Self {
-        self.transform_indices(|_x, y, size| size - 1 - y, |x, _y, size| size - 1 - x)
+#[derive(Debug)]
+struct PatchMatch {
+    rotation_times: usize,
+    position: (isize, isize),
+}
+
+impl<T: Eq + Copy, const W: usize, const H: usize> Grid<T, W, H> {
+    fn check_patch_at<const S: usize>(
+        &self,
+        patch: &Grid<Option<T>, S, S>,
+        offset_x: isize,
+        offset_y: isize,
+    ) -> bool {
+        for (patch_y, row) in patch.items.iter().enumerate() {
+            'inner: for (patch_x, item) in row.iter().enumerate() {
+                match item {
+                    // None is a 'dont care' value and matches anything
+                    None => continue 'inner,
+                    Some(item) => {
+                        let grid_x = patch_x as isize + offset_x;
+                        let grid_y = patch_y as isize + offset_y;
+                        // patch has a value but is outside of the grid, BAD!
+                        if grid_x < 0
+                            || grid_y < 0
+                            || grid_x >= (W as isize)
+                            || grid_y >= (H as isize)
+                        {
+                            return false;
+                        }
+                        let grid_item = &self.items[grid_y as usize][grid_x as usize];
+                        // if _any_ items fail to match, the whole patch fails
+                        if grid_item != item {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        true
     }
 
-    // fn rot_180(&self) -> Self
+    fn get_patch_matches<const S: usize>(&self, patch: &Grid<Option<T>, S, S>) -> Vec<PatchMatch> {
+        let mut matches = Vec::new();
+        for rotation_times in [0, 1, 2, 3] {
+            let rotated_patch = patch.rotate(rotation_times);
+            for offset_x in (-(S as isize - 1))..W as isize {
+                for offset_y in (-(S as isize - 1))..H as isize {
+                    println!("{}, {}", offset_x, offset_y);
+                    if self.check_patch_at(&rotated_patch, offset_x, offset_y) {
+                        matches.push(PatchMatch {
+                            rotation_times,
+                            position: (offset_x, offset_y),
+                        });
+                        println!("Match!");
+                    }
+                }
+            }
+        }
+        matches
+    }
+}
 
+/// Rotation only implemented for square grids (W==H)
+impl<T: Default + Copy, const S: usize> Grid<T, S, S> {
+    /// x_transform: lambda of (old_x, old_y, size) -> new_x
+    /// y_transform: lambda of (old_x, old_y, size) -> new_y
     fn transform_indices<R1, R2>(&self, x_transform: R1, y_transform: R2) -> Self
     where
         R1: Fn(usize, usize, usize) -> usize,
@@ -102,7 +161,7 @@ impl<T: Default + Copy, const S: usize> Grid<T, S, S> {
             row.iter().enumerate().for_each(|(x, item)| {
                 let new_x = x_transform(x, y, S);
                 let new_y = y_transform(x, y, S);
-                ret.items[new_y][new_x] = item.clone();
+                ret.items[new_y][new_x] = *item;
             })
         });
         ret
@@ -151,7 +210,26 @@ impl<T: Colorable, const W: usize, const H: usize> Grid<T, W, H> {
 }
 
 fn main() {
-    nannou::app(model).event(event).run();
+    //nannou::app(model).event(event).run();
+    const B: Tile = Tile::Black;
+    const R: Tile = Tile::Red;
+    let grid = Grid {
+        items: [
+            [R, B, B, B, B, B, B, B],
+            [R, B, R, R, B, B, B, B],
+            [B, B, B, B, B, B, B, B],
+            [B, B, B, B, B, B, B, B],
+        ],
+    };
+
+    const PD: Option<Tile> = None;
+    const PR: Option<Tile> = Some(Tile::Red);
+
+    let patch = Grid {
+        items: [[PR, PR], [PD, PD]],
+    };
+
+    println!("{:#?}", grid.get_patch_matches(&patch));
 }
 
 fn model(app: &App) -> Model {
