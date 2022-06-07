@@ -1,5 +1,8 @@
 use nannou::prelude::*;
 
+mod coord;
+mod grid;
+
 struct Model {
     window: window::Id,
     grid: Grid<Tile, 64, 64>,
@@ -213,7 +216,7 @@ impl<T: Default + Copy, const S: usize> Grid<T, S, S> {
             // 0 degrees (no-op)
             0 => self.transform_indices(|x, _, _| x, |_, y, _| y),
             // 90 degrees
-            1 => self.transform_indices(|_, y, size| size - 1 - y, |x, _, size| x),
+            1 => self.transform_indices(|_, y, size| size - 1 - y, |x, _, _| x),
             // 180 degrees
             2 => self.transform_indices(|x, _, size| size - 1 - x, |_, y, size| size - 1 - y),
             // 270 degrees
