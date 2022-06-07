@@ -252,7 +252,7 @@ impl<T: Colorable, const W: usize, const H: usize> Grid<T, W, H> {
 }
 
 fn main() {
-    nannou::app(model).event(event).run();
+    nannou::app(model).event(event).update(update).run();
 }
 
 fn model(app: &App) -> Model {
@@ -325,8 +325,14 @@ fn model(app: &App) -> Model {
 
 fn event(_app: &App, _model: &mut Model, _event: Event) {}
 
+fn update(_app: &App, model: &mut Model, _update: Update) {
+    for _ in 0..100 {
+        model.grid.priority_random_repace(&model.rules);
+    }
+}
+
 fn key_pressed_fn(_app: &App, model: &mut Model, _k: Key) {
-    model.grid.priority_random_repace(&model.rules)
+    //model.grid.priority_random_repace(&model.rules)
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
