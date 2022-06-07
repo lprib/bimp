@@ -1,24 +1,25 @@
+/// Methods take owned self since this requires T: Copy
 pub trait Coord: Sized + Copy {
     const ZERO: Self;
 
     /// If coord is N-dim width, height, depth, calculate volume
-    fn extent(&self) -> usize;
+    fn extent(self) -> usize;
     /// Convert N-dim coord to flat array index
-    fn to_flat(&self, size: &Self) -> usize;
+    fn to_flat(self, size: Self) -> usize;
 
     const NUM_ROTATIONS: usize;
 
     /// the coords rotated n times
-    fn rotated(&self, times: usize, grid_size: &Self) -> Self;
+    fn rotated(self, times: usize, grid_size: Self) -> Self;
 
     fn canonical_rotation_times(times: usize) -> usize {
         times % Self::NUM_ROTATIONS
     }
 
-    fn cartesian_iter(&self) -> CoordIter<Self> {
+    fn cartesian_iter(self) -> CoordIter<Self> {
         CoordIter {
             index: Self::ZERO,
-            target: *self,
+            target: self,
         }
     }
 }
@@ -32,20 +33,20 @@ pub struct CoordIter<C: Coord> {
 impl Coord for usize {
     const ZERO: Self = 0;
 
-    fn extent(&self) -> usize {
-        *self
+    fn extent(self) -> usize {
+        self
     }
-    fn to_flat(&self, _: &Self) -> Self {
-        *self
+    fn to_flat(self, _: Self) -> Self {
+        self
     }
 
     const NUM_ROTATIONS: usize = 2;
 
-    fn rotated(&self, times: usize, grid_size: &Self) -> Self {
+    fn rotated(self, times: usize, grid_size: Self) -> Self {
         let times = Self::canonical_rotation_times(times);
         match times {
-            0 => *self,
-            1 => grid_size - 1 - *self,
+            0 => self,
+            1 => grid_size - 1 - self,
             _ => unreachable!(),
         }
     }
@@ -69,20 +70,20 @@ impl Iterator for CoordIter<usize> {
 impl Coord for (usize, usize) {
     const ZERO: Self = (0, 0);
 
-    fn extent(&self) -> usize {
+    fn extent(self) -> usize {
         self.0 * self.1
     }
 
-    fn to_flat(&self, size: &Self) -> usize {
+    fn to_flat(self, size: Self) -> usize {
         size.1 * self.0 + self.1
     }
 
     const NUM_ROTATIONS: usize = 4;
 
-    fn rotated(&self, times: usize, grid_size: &Self) -> Self {
+    fn rotated(self, times: usize, grid_size: Self) -> Self {
         let times = Self::canonical_rotation_times(times);
         match times {
-            0 => *self,
+            0 => self,
             1 => (grid_size.1 - 1 - self.1, self.0),
             2 => (grid_size.0 - 1 - self.0, grid_size.1 - 1 - self.1),
             3 => (self.1, grid_size.0 - 1 - self.0),
