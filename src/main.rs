@@ -2,6 +2,10 @@ use nannou::prelude::*;
 
 mod coord;
 mod grid;
+mod ngrid;
+mod rotation;
+
+use rotation::*;
 
 struct Model {
     window: window::Id,
@@ -255,7 +259,12 @@ impl<T: Colorable, const W: usize, const H: usize> Grid<T, W, H> {
 }
 
 fn main() {
-    nannou::app(model).event(event).update(update).run();
+    //nannou::app(model).event(event).update(update).run();
+    parity(&[0, 1, 2, 3]);
+    parity(&[0, 2, 1, 3]);
+    parity(&[3, 2, 1, 0]);
+    parity(&[1, 2, 3, 0]);
+    parity(&[1, 2, 0, 3]);
 }
 
 fn model(app: &App) -> Model {

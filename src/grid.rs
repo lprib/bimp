@@ -12,6 +12,11 @@ struct Grid<TItem, TCoord: Coord> {
 trait GridView<TItem, TCoord: Coord>: Index<TCoord, Output = TItem> {
     fn size(&self) -> TCoord;
     fn flat_items_view(&self) -> &[TItem];
+    /// Todo dont require same TItem, just PartialEq with other's item
+    fn matches<TOther: GridView<TItem, TCoord>>(other: TOther) -> bool {
+        false
+        //todo maybe just include rotation for every grid? fuck this
+    }
 }
 
 impl<TItem, TCoord: Coord> Grid<TItem, TCoord> {
