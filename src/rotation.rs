@@ -1,31 +1,44 @@
 use std::collections::HashSet;
 
+/// Identifies an axis. 0=>X, 1=>Y, 2=>Z, etc.
 type AxisId = usize;
 
 #[derive(Debug)]
+/// A transformed axis is one that is derived from another axis (input_axis) and is optionally
+/// negated
 pub struct TransformedAxis {
     input_axis: usize,
     negated: bool,
 }
 
 #[derive(Debug)]
+/// Ordered list of axes, along with their permutation parity from the non-rotated orientation [X,
+/// Y, Z, W, ...]
 pub struct AxisPermutation {
     items: Vec<AxisId>,
     parity: bool,
 }
 
+/// The transformed basis vectors that encode a rotation. Each axis can be permuted in any order
+/// and some can be negated according to parity rules.
 type RotationConfiguration = Vec<TransformedAxis>;
 
 /// https://math.stackexchange.com/questions/2603222/simple-rotations-in-n-dimensions-limited-to-right-angle-rotations
-pub fn rotation_permutations(num_axes: usize) -> Vec<RotationConfiguration> {
-    let num_arrangements = num_axes.pow(num_axes as u32);
+pub fn rotation_permutations(dimension: usize) -> Vec<RotationConfiguration> {
+    // arrangement: Axis permutation that may or may not have duplicates, ie. [X, X, Y] (has
+    // duplicates, invalid) or [Z, Y, X] (no duplicates, valid permutation)
+    let num_arrangements = dimension.pow(dimension as u32);
     (0..num_arrangements)
         .map(|i| {
-            (0..num_axes)
-                .map(|a| (i / num_axes.pow(a as u32)) % num_axes)
+            (0..dimension)
+                // treat arrangement as a base-"dimension" number, and extract the digits. One
+                // digit encodes one transformed axis.
+                .map(|digit_index| (i / dimension.pow(digit_index as u32)) % dimension)
                 .collect::<Vec<_>>()
         })
+        // filter out arrangements that have duplicates as they are trivially invalid
         .filter(|arrangement| is_permutation(arrangement))
+        // calculate and record parity for each permutation
         .map(move |arrangement| {
             let parity = parity(&arrangement);
             AxisPermutation {
@@ -33,11 +46,15 @@ pub fn rotation_permutations(num_axes: usize) -> Vec<RotationConfiguration> {
                 parity,
             }
         })
+        // Expand each permutation to every possible axis negation scenario
         .flat_map(|permutation| enumerate_negations(permutation))
         .collect()
 }
 
+/// A list of axes can only be a permutation of the non-rotated orientation [X, Y, Z, W, ...] if
+/// there are no duplicates eg. [X, X, Z, W].
 fn is_permutation(arr: &[AxisId]) -> bool {
+    // check duplication using hashset.
     let mut unique = HashSet::new();
     arr.iter().all(move |x| unique.insert(x))
 }
@@ -108,6 +125,7 @@ fn enumerate_negations(permutation: AxisPermutation) -> Vec<RotationConfiguratio
     out
 }
 
+/// value of index'th bit in n
 fn bit(n: u32, index: u32) -> bool {
     n & (1 << index) != 0
 }
