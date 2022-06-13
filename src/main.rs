@@ -2,10 +2,13 @@ use nannou::prelude::*;
 
 mod coord;
 mod grid;
-mod ngrid;
+mod ndcoord;
+mod ndgrid;
 mod rotation;
 
 use rotation::*;
+
+use crate::ndcoord::{CartesianIter, Coord};
 
 struct Model {
     window: window::Id,
@@ -260,7 +263,10 @@ impl<T: Colorable, const W: usize, const H: usize> Grid<T, W, H> {
 
 fn main() {
     //nannou::app(model).event(event).update(update).run();
-    println!("{:#?}", rotation_permutations(3));
+    // println!("{:#?}", rotation_permutations(3));
+    //println!("{:#?}", i.collect::<Vec<_>>())
+    let mut i = Coord::new_3d(1, 1, 1).iter_volume(&Coord::new_3d(3, 3, 3));
+    println!("{:#?}", i.collect::<Vec<_>>())
 }
 
 fn model(app: &App) -> Model {
